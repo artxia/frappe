@@ -32,6 +32,12 @@ frappe.ui.form.ControlAttach = class ControlAttach extends frappe.ui.form.Contro
 
 		frappe.utils.bind_actions_with_object(this.$value, this);
 		this.toggle_reload_button();
+
+		// Don't allow attaching to child tables for new documents
+		if (this.doc.__islocal && this.doc.parent) {
+			this.$input.prop("disabled", true);
+			this.$input.attr("title", __("Save to enable file upload"));
+		}
 	}
 	clear_attachment() {
 		let me = this;
@@ -63,7 +69,6 @@ frappe.ui.form.ControlAttach = class ControlAttach extends frappe.ui.form.Contro
 	on_attach_doc_image() {
 		this.set_upload_options();
 		this.upload_options.restrictions.allowed_file_types = ["image/*"];
-		this.upload_options.restrictions.crop_image_aspect_ratio = 1;
 		this.file_uploader = new frappe.ui.FileUploader(this.upload_options);
 	}
 	set_upload_options() {
@@ -80,7 +85,9 @@ frappe.ui.form.ControlAttach = class ControlAttach extends frappe.ui.form.Contro
 			options.doctype = this.frm.doctype;
 			options.docname = this.frm.docname;
 			options.fieldname = this.df.fieldname;
-			options.make_attachments_public = this.frm.meta.make_attachments_public;
+			options.make_attachments_public = this.df.make_attachment_public
+				? 1
+				: this.frm.meta.make_attachments_public;
 		}
 
 		if (this.df.options) {
@@ -93,7 +100,6 @@ frappe.ui.form.ControlAttach = class ControlAttach extends frappe.ui.form.Contro
 		this.last_value = this.value;
 		this.value = value;
 		if (this.value) {
-			this.$input.toggle(false);
 			// value can also be using this format: FILENAME,DATA_URL
 			// Important: We have to be careful because normal filenames may also contain ","
 			let file_url_parts = this.value.match(/^([^:]+),(.+):(.+)$/);
@@ -102,11 +108,22 @@ frappe.ui.form.ControlAttach = class ControlAttach extends frappe.ui.form.Contro
 				filename = file_url_parts[1];
 				dataurl = file_url_parts[2] + ":" + file_url_parts[3];
 			}
-			this.$value
-				.toggle(true)
-				.find(".attached-file-link")
-				.html(filename || this.value)
-				.attr("href", dataurl || this.value);
+			if (this.$input && this.$value) {
+				this.$input.toggle(false);
+				this.$value
+					.toggle(true)
+					.find(".attached-file-link")
+					.html(filename || this.value)
+					.attr("href", dataurl || this.value);
+			} else {
+				this.$wrapper.html(`
+					  <div class="attached-file flex justify-between align-center">
+						<div class="ellipsis">
+						  <a href="${dataurl || this.value}" target="_blank">${filename || this.value}</a>
+						</div>
+					  </div>
+				`);
+			}
 		} else {
 			this.$input.toggle(true);
 			this.$value.toggle(false);
